@@ -38,6 +38,17 @@ jobs:
           role: admin-discord
           kv-path: homelab/admin-discord/discord-bot-token
           output-name: DISCORD_TOKEN
+      # A plain init against the OLD backend first, exactly as
+      # provider.tf still declares it -- required so the next init has
+      # a local backend to detect a change against. On a fresh CI
+      # checkout there's no .terraform/ history at all, so without
+      # this step -migrate-state has nothing to compare against and
+      # silently just inits fresh against the new (empty) bucket
+      # instead of actually copying anything (confirmed the hard way:
+      # the first attempt at this workflow did exactly that). Reads
+      # the old bucket using this same new credential's temporary
+      # grant (k8s-garage#8).
+      - run: tofu init
       - run: tofu init -migrate-state -force-copy -backend-config="bucket=admin-discord-tofu-state"
       - name: Confirm zero drift against the migrated state
         run: tofu plan -detailed-exitcode
