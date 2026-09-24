@@ -33,6 +33,11 @@ jobs:
         with:
           role: admin-discord-tofu-state
           kv-prefix: service/k8s-garage/admin-discord
+      - uses: mattjmorrison-homelab/actions-openbao@a9a15ee54f4b6a08b17ddd55df99d5109cfb5748 # main
+        with:
+          role: admin-discord
+          kv-path: homelab/admin-discord/discord-bot-token
+          output-name: DISCORD_TOKEN
       - run: tofu init -migrate-state -force-copy -backend-config="bucket=admin-discord-tofu-state"
       - name: Confirm zero drift against the migrated state
         run: tofu plan -detailed-exitcode
