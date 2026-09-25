@@ -37,6 +37,7 @@ jobs:
       - uses: mattjmorrison-homelab/actions-tofu/upload-plan@c4253df5832781cf10d3b5dda78c135e6eed2a6b
         with:
           key: plans/${{ github.repository }}/${{ github.event.pull_request.head.sha }}/tfplan
+          bucket: admin-discord-tofu-state
 
   apply:
     if: github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
@@ -57,6 +58,7 @@ jobs:
       - uses: mattjmorrison-homelab/actions-tofu/download-plan@c4253df5832781cf10d3b5dda78c135e6eed2a6b
         with:
           key: plans/${{ github.repository }}/${{ github.event.pull_request.head.sha }}/tfplan
+          bucket: admin-discord-tofu-state
       - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1.0.8
         with:
           tofu_version: "1.12.0"
