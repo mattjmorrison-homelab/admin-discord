@@ -65,3 +65,24 @@ jobs:
           tofu_wrapper: false
       - run: tofu init
       - run: tofu apply -auto-approve tfplan
+
+      # Pushes each consumer's own dedicated webhook URL into its own
+      # OpenBao path, right after creating/confirming it -- this repo
+      # owns the value, so it's the only thing that ever writes it.
+      # Consumers only ever read from OpenBao now, never this repo's
+      # Terraform state directly (replaces the old read-output
+      # mechanism ui-hdmi-switch/graph-hdmi-switch used to use).
+      - id: ui_hdmi_switch_webhook
+        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["ui-hdmi-switch"]')" >> "$GITHUB_OUTPUT"
+      - uses: mattjmorrison-homelab/actions-openbao/write-secret@0fe1624c376515aee139cc58ac8328d9921e21dd # main
+        with:
+          role: admin-discord-webhooks
+          kv-path: homelab/service/admin-discord/ui-hdmi-switch/webhook-url
+          value: ${{ steps.ui_hdmi_switch_webhook.outputs.value }}
+      - id: graph_hdmi_switch_webhook
+        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["graph-hdmi-switch"]')" >> "$GITHUB_OUTPUT"
+      - uses: mattjmorrison-homelab/actions-openbao/write-secret@0fe1624c376515aee139cc58ac8328d9921e21dd # main
+        with:
+          role: admin-discord-webhooks
+          kv-path: homelab/service/admin-discord/graph-hdmi-switch/webhook-url
+          value: ${{ steps.graph_hdmi_switch_webhook.outputs.value }}
