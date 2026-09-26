@@ -4,10 +4,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
-env:
-  VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
-  VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
-
 jobs:
   check:
     if: github.event.action != 'closed'
@@ -73,19 +69,46 @@ jobs:
   apply:
     if: github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: k8s-amd64
+    # OIDC (todo #17): same roles/mechanism proven in the check job -- one
+    # role per policy, reused across every job in this repo, since the
+    # bound_claims only distinguish "which repo", not "which job".
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: main
-      - uses: mattjmorrison-homelab/actions-tofu/fetch-credentials@ee8759dc24664be5d19aef68d09032e7eb08169e # main
-        with:
-          role: admin-discord-tofu-state
-          kv-prefix: service/k8s-garage/admin-discord
-      - uses: mattjmorrison-homelab/actions-openbao@a9a15ee54f4b6a08b17ddd55df99d5109cfb5748 # main
-        with:
-          role: admin-discord
-          kv-path: homelab/admin-discord/discord-bot-token
-          output-name: DISCORD_TOKEN
+      - name: Fetch credentials via GitHub OIDC + OpenBao jwt auth
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+        run: |
+          GH_OIDC_TOKEN=$(curl -sf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=openbao" | jq -r '.value')
+          echo "GH_OIDC_TOKEN=$GH_OIDC_TOKEN" >> "$GITHUB_ENV"
+
+          vault_login() {
+            curl -sf -X POST "$VAULT_ADDR/v1/auth/jwt/login" \
+              -d "$(jq -nc --arg jwt "$GH_OIDC_TOKEN" --arg role "$1" '{jwt: $jwt, role: $role}')" \
+              | jq -r '.auth.client_token'
+          }
+          fetch_secret() {
+            curl -sf -H "X-Vault-Token: $1" "$VAULT_ADDR/v1/kv/data/$2" | jq -r '.data.data.value'
+          }
+
+          TOFU_STATE_TOKEN=$(vault_login admin-discord-tofu-state-oidc)
+          ACCESS_KEY_ID=$(fetch_secret "$TOFU_STATE_TOKEN" homelab/service/k8s-garage/admin-discord/tofu-state-access-key-id)
+          SECRET_ACCESS_KEY=$(fetch_secret "$TOFU_STATE_TOKEN" homelab/service/k8s-garage/admin-discord/tofu-state-secret-access-key)
+
+          BOT_TOKEN=$(vault_login admin-discord-oidc)
+          DISCORD_TOKEN=$(fetch_secret "$BOT_TOKEN" homelab/admin-discord/discord-bot-token)
+
+          echo "::add-mask::$ACCESS_KEY_ID"
+          echo "::add-mask::$SECRET_ACCESS_KEY"
+          echo "::add-mask::$DISCORD_TOKEN"
+          echo "AWS_ACCESS_KEY_ID=$ACCESS_KEY_ID" >> "$GITHUB_ENV"
+          echo "AWS_SECRET_ACCESS_KEY=$SECRET_ACCESS_KEY" >> "$GITHUB_ENV"
+          echo "DISCORD_TOKEN=$DISCORD_TOKEN" >> "$GITHUB_ENV"
       - uses: mattjmorrison-homelab/actions-tofu/download-plan@c4253df5832781cf10d3b5dda78c135e6eed2a6b
         with:
           key: plans/${{ github.repository }}/${{ github.event.pull_request.head.sha }}/tfplan
@@ -103,17 +126,38 @@ jobs:
       # Consumers only ever read from OpenBao now, never this repo's
       # Terraform state directly (replaces the old read-output
       # mechanism ui-hdmi-switch/graph-hdmi-switch used to use).
+      #
+      # OIDC (todo #17): reuses the GH_OIDC_TOKEN fetched above, logging
+      # in via the separate, write-only admin-discord-webhooks-oidc role
+      # -- kept as its own login rather than folded into the read login
+      # above, same narrow-write-scope shape the Kubernetes-auth version
+      # had (a distinct role just for this write).
+      - name: Log in for webhook writes
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+        run: |
+          WEBHOOKS_TOKEN=$(curl -sf -X POST "$VAULT_ADDR/v1/auth/jwt/login" \
+            -d "$(jq -nc --arg jwt "$GH_OIDC_TOKEN" '{jwt: $jwt, role: "admin-discord-webhooks-oidc"}')" \
+            | jq -r '.auth.client_token')
+          echo "::add-mask::$WEBHOOKS_TOKEN"
+          echo "WEBHOOKS_TOKEN=$WEBHOOKS_TOKEN" >> "$GITHUB_ENV"
       - id: ui_hdmi_switch_webhook
         run: echo "value=$(tofu output -json webhook_urls | jq -r '.["ui-hdmi-switch"]')" >> "$GITHUB_OUTPUT"
-      - uses: mattjmorrison-homelab/actions-openbao/write-secret@0fe1624c376515aee139cc58ac8328d9921e21dd # main
-        with:
-          role: admin-discord-webhooks
-          kv-path: homelab/service/admin-discord/ui-hdmi-switch/webhook-url
-          value: ${{ steps.ui_hdmi_switch_webhook.outputs.value }}
+      - name: Write ui-hdmi-switch webhook URL
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+          WEBHOOK_VALUE: ${{ steps.ui_hdmi_switch_webhook.outputs.value }}
+        run: |
+          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
+            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
+            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/ui-hdmi-switch/webhook-url" > /dev/null
       - id: graph_hdmi_switch_webhook
         run: echo "value=$(tofu output -json webhook_urls | jq -r '.["graph-hdmi-switch"]')" >> "$GITHUB_OUTPUT"
-      - uses: mattjmorrison-homelab/actions-openbao/write-secret@0fe1624c376515aee139cc58ac8328d9921e21dd # main
-        with:
-          role: admin-discord-webhooks
-          kv-path: homelab/service/admin-discord/graph-hdmi-switch/webhook-url
-          value: ${{ steps.graph_hdmi_switch_webhook.outputs.value }}
+      - name: Write graph-hdmi-switch webhook URL
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+          WEBHOOK_VALUE: ${{ steps.graph_hdmi_switch_webhook.outputs.value }}
+        run: |
+          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
+            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
+            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/graph-hdmi-switch/webhook-url" > /dev/null
