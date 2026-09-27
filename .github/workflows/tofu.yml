@@ -161,3 +161,13 @@ jobs:
           curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
             -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
             "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/graph-hdmi-switch/webhook-url" > /dev/null
+      - id: app_backstage_webhook
+        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["app-backstage"]')" >> "$GITHUB_OUTPUT"
+      - name: Write app-backstage webhook URL
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+          WEBHOOK_VALUE: ${{ steps.app_backstage_webhook.outputs.value }}
+        run: |
+          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
+            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
+            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/app-backstage/webhook-url" > /dev/null
