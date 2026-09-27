@@ -48,7 +48,16 @@ locals {
       consumer = "graph-hdmi-switch's own CI failure-notify step"
     }
     app-backstage = {
-      channel  = "deploys"
+      channel = "deploys"
+      # Its webhook object was created successfully on the first apply
+      # (#13), but writing the value into OpenBao failed -- that apply
+      # landed 12s before admin-openbao#86 (the grant letting this repo's
+      # own CI write app-backstage's specific webhook-url path) actually
+      # applied, so the token minted for that run predated the
+      # permission it needed. Re-running the same job then failed with
+      # "Saved plan is stale" (state had already moved since that plan
+      # was made). This otherwise-no-op change exists purely to force a
+      # fresh plan+apply now that the grant has been live for a while.
       consumer = "app-backstage's own CI failure-notify step"
     }
     uptime = {
