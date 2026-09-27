@@ -47,6 +47,10 @@ locals {
       channel  = "deploys"
       consumer = "graph-hdmi-switch's own CI failure-notify step"
     }
+    app-backstage = {
+      channel  = "deploys"
+      consumer = "app-backstage's own CI failure-notify step"
+    }
     uptime = {
       channel  = "uptime"
       consumer = "pi-health (UPTIME_WEBHOOK_URL)"
