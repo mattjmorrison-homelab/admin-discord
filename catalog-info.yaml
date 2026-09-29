@@ -1,0 +1,11 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: admin-discord
+  annotations:
+    github.com/project-slug: mattjmorrison-homelab/admin-discord
+spec:
+  type: iac
+  owner: mattjmorrison-homelab
+  lifecycle: experimental
+  system: automation
