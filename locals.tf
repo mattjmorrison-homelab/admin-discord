@@ -7,10 +7,12 @@ locals {
   # Every channel this homelab actually uses. One discord_text_channel
   # resource per entry (see channels.tf).
   channels = {
-    alerts   = {}
-    deploys  = {}
-    uptime   = {}
-    downtime = {}
+    alerts        = {}
+    deploys       = {}
+    uptime        = {}
+    downtime      = {}
+    ad-blocked    = {}
+    ad-suspicious = {}
   }
 
   # Every webhook this homelab actually uses. One discord_webhook resource
@@ -67,6 +69,14 @@ locals {
     downtime = {
       channel  = "downtime"
       consumer = "pi-health (DOWNTIME_WEBHOOK_URL) and k8s-alertmanager (PiNodeExporterDown downtime proxy)"
+    }
+    ad-reporter-confirmed = {
+      channel  = "ad-blocked"
+      consumer = "ad-reporter-investigate skill (confirmed-ad domains it blocked)"
+    }
+    ad-reporter-suspicious = {
+      channel  = "ad-suspicious"
+      consumer = "ad-reporter-investigate skill (ambiguous candidates, informational only)"
     }
   }
 }

@@ -171,3 +171,23 @@ jobs:
           curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
             -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
             "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/app-backstage/webhook-url" > /dev/null
+      - id: ad_reporter_confirmed_webhook
+        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["ad-reporter-confirmed"]')" >> "$GITHUB_OUTPUT"
+      - name: Write ad-reporter-confirmed webhook URL
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+          WEBHOOK_VALUE: ${{ steps.ad_reporter_confirmed_webhook.outputs.value }}
+        run: |
+          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
+            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
+            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/k8s-ad-reporter/confirmed-webhook-url" > /dev/null
+      - id: ad_reporter_suspicious_webhook
+        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["ad-reporter-suspicious"]')" >> "$GITHUB_OUTPUT"
+      - name: Write ad-reporter-suspicious webhook URL
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+          WEBHOOK_VALUE: ${{ steps.ad_reporter_suspicious_webhook.outputs.value }}
+        run: |
+          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
+            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
+            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/k8s-ad-reporter/suspicious-webhook-url" > /dev/null
