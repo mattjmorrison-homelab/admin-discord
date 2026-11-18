@@ -5,13 +5,13 @@ setup() {
   export CAPTURE_DIR="$BATS_TEST_TMPDIR"
   SCRIPT="$BATS_TEST_DIRNAME/../scripts/write-webhook-secrets.sh"
   export VAULT_ADDR="http://vault.test"
-  export WEBHOOKS_TOKEN="fake-webhooks-token"
+  export ACTIONS_ID_TOKEN_REQUEST_TOKEN="fake-request-token"
+  export ACTIONS_ID_TOKEN_REQUEST_URL="https://actions.test/oidc?foo=bar"
 
-  URLS_FILE="$BATS_TEST_TMPDIR/webhook_urls.json"
-  PATHS_FILE="$BATS_TEST_TMPDIR/webhook_openbao_paths.json"
+  OUTPUTS_FILE="$BATS_TEST_TMPDIR/outputs.json"
 }
 
-@test "fails when the webhook_urls.json argument is missing" {
+@test "fails when the outputs.json argument is missing" {
   run bash "$SCRIPT"
   [ "$status" -eq 1 ]
   [[ "$output" == *"usage:"* ]]
@@ -19,31 +19,50 @@ setup() {
 
 @test "fails when VAULT_ADDR is unset" {
   unset VAULT_ADDR
-  echo '{}' > "$URLS_FILE"
-  echo '{}' > "$PATHS_FILE"
-  run bash "$SCRIPT" "$URLS_FILE" "$PATHS_FILE"
+  echo '{"webhook_urls": {"value": {}}, "webhook_openbao_paths": {"value": {}}}' > "$OUTPUTS_FILE"
+  run bash "$SCRIPT" "$OUTPUTS_FILE"
   [ "$status" -ne 0 ]
   [[ "$output" == *"VAULT_ADDR"* ]]
 }
 
-@test "fails when WEBHOOKS_TOKEN is unset" {
-  unset WEBHOOKS_TOKEN
-  echo '{}' > "$URLS_FILE"
-  echo '{}' > "$PATHS_FILE"
-  run bash "$SCRIPT" "$URLS_FILE" "$PATHS_FILE"
+@test "fails when ACTIONS_ID_TOKEN_REQUEST_TOKEN is unset" {
+  unset ACTIONS_ID_TOKEN_REQUEST_TOKEN
+  echo '{"webhook_urls": {"value": {}}, "webhook_openbao_paths": {"value": {}}}' > "$OUTPUTS_FILE"
+  run bash "$SCRIPT" "$OUTPUTS_FILE"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"WEBHOOKS_TOKEN"* ]]
+  [[ "$output" == *"ACTIONS_ID_TOKEN_REQUEST_TOKEN"* ]]
 }
 
-@test "posts each webhook's URL to its own OpenBao path" {
-  cat > "$URLS_FILE" <<'JSON'
-{"uptime": "https://discord.test/uptime-hook", "downtime": "https://discord.test/downtime-hook"}
-JSON
-  cat > "$PATHS_FILE" <<'JSON'
-{"uptime": "service/admin-discord/pi-health/uptime-webhook-url", "downtime": "service/admin-discord/pi-health/downtime-webhook-url"}
+@test "fails when ACTIONS_ID_TOKEN_REQUEST_URL is unset" {
+  unset ACTIONS_ID_TOKEN_REQUEST_URL
+  echo '{"webhook_urls": {"value": {}}, "webhook_openbao_paths": {"value": {}}}' > "$OUTPUTS_FILE"
+  run bash "$SCRIPT" "$OUTPUTS_FILE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ACTIONS_ID_TOKEN_REQUEST_URL"* ]]
+}
+
+@test "logs in via GitHub OIDC with the webhooks-write role before writing" {
+  cat > "$OUTPUTS_FILE" <<'JSON'
+{"webhook_urls": {"value": {"argocd": "https://discord.test/argocd-hook"}},
+ "webhook_openbao_paths": {"value": {"argocd": "k8s-argocd/discord-webhook-url"}}}
 JSON
 
-  run bash "$SCRIPT" "$URLS_FILE" "$PATHS_FILE"
+  run bash "$SCRIPT" "$OUTPUTS_FILE"
+  [ "$status" -eq 0 ]
+
+  grep -q "audience=openbao" "$CAPTURE_DIR/curl.calls"
+  grep -q "auth/jwt/login" "$CAPTURE_DIR/curl.calls"
+  [ "$(jq -r '.role' "$CAPTURE_DIR/login.log")" = "admin-discord-webhooks-oidc" ]
+  [ "$(jq -r '.jwt' "$CAPTURE_DIR/login.log")" = "fake-oidc-jwt" ]
+}
+
+@test "posts each webhook's URL to its own OpenBao path, extracted from one outputs.json" {
+  cat > "$OUTPUTS_FILE" <<'JSON'
+{"webhook_urls": {"value": {"uptime": "https://discord.test/uptime-hook", "downtime": "https://discord.test/downtime-hook"}},
+ "webhook_openbao_paths": {"value": {"uptime": "service/admin-discord/pi-health/uptime-webhook-url", "downtime": "service/admin-discord/pi-health/downtime-webhook-url"}}}
+JSON
+
+  run bash "$SCRIPT" "$OUTPUTS_FILE"
   [ "$status" -eq 0 ]
 
   grep -q "kv/data/homelab/service/admin-discord/pi-health/uptime-webhook-url" "$CAPTURE_DIR/curl.calls"
@@ -53,25 +72,22 @@ JSON
 }
 
 @test "sends the URL value wrapped in the data.value body" {
-  cat > "$URLS_FILE" <<'JSON'
-{"argocd": "https://discord.test/argocd-hook"}
-JSON
-  cat > "$PATHS_FILE" <<'JSON'
-{"argocd": "k8s-argocd/discord-webhook-url"}
+  cat > "$OUTPUTS_FILE" <<'JSON'
+{"webhook_urls": {"value": {"argocd": "https://discord.test/argocd-hook"}},
+ "webhook_openbao_paths": {"value": {"argocd": "k8s-argocd/discord-webhook-url"}}}
 JSON
 
-  run bash "$SCRIPT" "$URLS_FILE" "$PATHS_FILE"
+  run bash "$SCRIPT" "$OUTPUTS_FILE"
   [ "$status" -eq 0 ]
 
   posted=$(cat "$CAPTURE_DIR/post.log")
   [ "$(echo "$posted" | jq -r '.data.value')" = "https://discord.test/argocd-hook" ]
 }
 
-@test "writes nothing when webhook_openbao_paths.json is empty" {
-  echo '{}' > "$URLS_FILE"
-  echo '{}' > "$PATHS_FILE"
+@test "writes nothing when webhook_openbao_paths is empty" {
+  echo '{"webhook_urls": {"value": {}}, "webhook_openbao_paths": {"value": {}}}' > "$OUTPUTS_FILE"
 
-  run bash "$SCRIPT" "$URLS_FILE" "$PATHS_FILE"
+  run bash "$SCRIPT" "$OUTPUTS_FILE"
   [ "$status" -eq 0 ]
   [ ! -f "$CAPTURE_DIR/post.log" ]
 }

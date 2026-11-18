@@ -3,6 +3,15 @@
 #
 # Every call's full argv is appended to $CAPTURE_DIR/curl.calls.
 #
+# A GET whose URL contains "audience=openbao" is the GitHub-OIDC-token
+# exchange (scripts/lib/vault-oidc-login.sh's first call): returns
+# $MOCK_OIDC_RESPONSE, default {"value": "fake-oidc-jwt"}.
+#
+# A POST to a URL containing "auth/jwt/login" is the Vault jwt login
+# (vault-oidc-login.sh's second call): its -d payload (containing the
+# role used) is logged to $CAPTURE_DIR/login.log, and it returns
+# $MOCK_LOGIN_RESPONSE, default {"auth": {"client_token": "fake-webhooks-token"}}.
+#
 # A POST to a URL containing "sys/capabilities-self" returns a
 # per-call-numbered response: the Nth such call returns
 # $MOCK_CAPS_RESPONSE_N if set, else $MOCK_CAPS_RESPONSE. Used by
@@ -20,7 +29,12 @@ for arg in "$@"; do
   prev="$arg"
 done
 
-if [[ "$*" == *sys/capabilities-self* ]]; then
+if [[ "$*" == *audience=openbao* ]]; then
+  printf '%s' "${MOCK_OIDC_RESPONSE:-{\"value\": \"fake-oidc-jwt\"\}}"
+elif [[ "$*" == *auth/jwt/login* ]]; then
+  echo "$payload" >> "${CAPTURE_DIR:?}/login.log"
+  printf '%s' "${MOCK_LOGIN_RESPONSE:-{\"auth\": {\"client_token\": \"fake-webhooks-token\"\}\}}"
+elif [[ "$*" == *sys/capabilities-self* ]]; then
   counter_file="${CAPTURE_DIR:?}/caps_call_count"
   n=0
   [ -f "$counter_file" ] && n=$(cat "$counter_file")
