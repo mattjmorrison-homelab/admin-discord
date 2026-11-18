@@ -61,6 +61,56 @@ jobs:
           echo "DISCORD_TOKEN=$DISCORD_TOKEN" >> "$GITHUB_ENV"
       - run: tofu init
       - run: tofu plan -out=tfplan
+      # Catches exactly the gap that caused the pi-health webhook bug
+      # (a new consumer added to locals.tf with no matching OpenBao
+      # write grant, nothing failing loudly) before merge instead of
+      # after. Needs the plan's computed outputs (webhook_openbao_paths
+      # is pure config, not a resource attribute, so it's fully known at
+      # plan time even for a brand-new output not yet in remote state) --
+      # placed after `tofu plan` rather than immediately after the OIDC
+      # credential-fetch step above for that reason, logging in via its
+      # own fresh GitHub OIDC token rather than reusing one from that
+      # earlier step.
+      - name: Verify OpenBao write grants exist for every webhook path
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+        run: |
+          GH_OIDC_TOKEN=$(curl -sf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=openbao" | jq -r '.value')
+
+          WEBHOOKS_TOKEN=$(curl -sf -X POST "$VAULT_ADDR/v1/auth/jwt/login" \
+            -d "$(jq -nc --arg jwt "$GH_OIDC_TOKEN" '{jwt: $jwt, role: "admin-discord-webhooks-oidc"}')" \
+            | jq -r '.auth.client_token')
+          echo "::add-mask::$WEBHOOKS_TOKEN"
+
+          tofu show -json tfplan \
+            | jq -r '.planned_values.outputs.webhook_openbao_paths.value | to_entries[] | "\(.key)=\(.value)"' \
+            > /tmp/webhook_openbao_paths.txt
+
+          missing=0
+          while IFS='=' read -r key suffix; do
+            [ -z "$key" ] && continue
+            VAULT_PATH="kv/data/homelab/$suffix"
+            CAPS=$(curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
+              -d "$(jq -nc --arg token "$WEBHOOKS_TOKEN" --arg path "$VAULT_PATH" '{token: $token, path: $path}')" \
+              "$VAULT_ADDR/v1/sys/capabilities-self" | jq -r '.capabilities | join(",")')
+
+            case ",$CAPS," in
+              *,create,*) ;;
+              *) echo "::error::OpenBao grant missing 'create' on $VAULT_PATH (webhooks.$key.openbao_path) -- see admin-openbao's admin-discord-webhooks policy"
+                 missing=1 ;;
+            esac
+            case ",$CAPS," in
+              *,update,*) ;;
+              *) echo "::error::OpenBao grant missing 'update' on $VAULT_PATH (webhooks.$key.openbao_path) -- see admin-openbao's admin-discord-webhooks policy"
+                 missing=1 ;;
+            esac
+          done < /tmp/webhook_openbao_paths.txt
+
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::One or more webhooks.* entries are missing their OpenBao create/update grant -- the apply job's write-back would silently fail for them. Fix in admin-openbao's admin-discord-webhooks policy before merging."
+            exit 1
+          fi
       - uses: mattjmorrison-homelab/actions-tofu/upload-plan@c4253df5832781cf10d3b5dda78c135e6eed2a6b
         with:
           key: plans/${{ github.repository }}/${{ github.event.pull_request.head.sha }}/tfplan
