@@ -191,3 +191,23 @@ jobs:
           curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
             -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
             "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/k8s-ad-reporter/suspicious-webhook-url" > /dev/null
+      - id: uptime_webhook
+        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["uptime"]')" >> "$GITHUB_OUTPUT"
+      - name: Write uptime webhook URL
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+          WEBHOOK_VALUE: ${{ steps.uptime_webhook.outputs.value }}
+        run: |
+          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
+            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
+            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/pi-health/uptime-webhook-url" > /dev/null
+      - id: downtime_webhook
+        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["downtime"]')" >> "$GITHUB_OUTPUT"
+      - name: Write downtime webhook URL
+        env:
+          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
+          WEBHOOK_VALUE: ${{ steps.downtime_webhook.outputs.value }}
+        run: |
+          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
+            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
+            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/pi-health/downtime-webhook-url" > /dev/null
