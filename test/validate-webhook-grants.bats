@@ -19,7 +19,7 @@ setup() {
 
 @test "fails when VAULT_ADDR is unset" {
   unset VAULT_ADDR
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": []}}}}' > "$PLAN_FILE"
   run bash "$SCRIPT" "$PLAN_FILE"
   [ "$status" -ne 0 ]
   [[ "$output" == *"VAULT_ADDR"* ]]
@@ -27,7 +27,7 @@ setup() {
 
 @test "fails when ACTIONS_ID_TOKEN_REQUEST_TOKEN is unset" {
   unset ACTIONS_ID_TOKEN_REQUEST_TOKEN
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": []}}}}' > "$PLAN_FILE"
   run bash "$SCRIPT" "$PLAN_FILE"
   [ "$status" -ne 0 ]
   [[ "$output" == *"ACTIONS_ID_TOKEN_REQUEST_TOKEN"* ]]
@@ -35,14 +35,14 @@ setup() {
 
 @test "fails when ACTIONS_ID_TOKEN_REQUEST_URL is unset" {
   unset ACTIONS_ID_TOKEN_REQUEST_URL
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": []}}}}' > "$PLAN_FILE"
   run bash "$SCRIPT" "$PLAN_FILE"
   [ "$status" -ne 0 ]
   [[ "$output" == *"ACTIONS_ID_TOKEN_REQUEST_URL"* ]]
 }
 
 @test "logs in via GitHub OIDC with the webhooks-write role before checking capabilities" {
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {"argocd": "k8s-argocd/discord-webhook-url"}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": [{"key": "argocd", "path": "service/admin-discord/k8s-argocd/discord-webhook-url"}]}}}}' > "$PLAN_FILE"
   export MOCK_CAPS_RESPONSE='{"capabilities": ["create", "update"]}'
 
   run bash "$SCRIPT" "$PLAN_FILE"
@@ -55,7 +55,7 @@ setup() {
 }
 
 @test "passes when every path has both create and update, extracted from the plan JSON" {
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {"argocd": "k8s-argocd/discord-webhook-url"}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": [{"key": "argocd", "path": "service/admin-discord/k8s-argocd/discord-webhook-url"}]}}}}' > "$PLAN_FILE"
   export MOCK_CAPS_RESPONSE='{"capabilities": ["create", "update", "read"]}'
 
   run bash "$SCRIPT" "$PLAN_FILE"
@@ -64,18 +64,18 @@ setup() {
 }
 
 @test "fails and reports the path+key when create is missing" {
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {"argocd": "k8s-argocd/discord-webhook-url"}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": [{"key": "argocd", "path": "service/admin-discord/k8s-argocd/discord-webhook-url"}]}}}}' > "$PLAN_FILE"
   export MOCK_CAPS_RESPONSE='{"capabilities": ["update"]}'
 
   run bash "$SCRIPT" "$PLAN_FILE"
   [ "$status" -eq 1 ]
   [[ "$output" == *"missing 'create'"* ]]
-  [[ "$output" == *"kv/data/homelab/k8s-argocd/discord-webhook-url"* ]]
-  [[ "$output" == *"webhooks.argocd.openbao_path"* ]]
+  [[ "$output" == *"kv/data/homelab/service/admin-discord/k8s-argocd/discord-webhook-url"* ]]
+  [[ "$output" == *"webhooks.argocd.openbao_paths"* ]]
 }
 
 @test "fails and reports the path+key when update is missing" {
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {"argocd": "k8s-argocd/discord-webhook-url"}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": [{"key": "argocd", "path": "service/admin-discord/k8s-argocd/discord-webhook-url"}]}}}}' > "$PLAN_FILE"
   export MOCK_CAPS_RESPONSE='{"capabilities": ["create"]}'
 
   run bash "$SCRIPT" "$PLAN_FILE"
@@ -84,7 +84,7 @@ setup() {
 }
 
 @test "fails when capabilities is deny, none of create/update present" {
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {"argocd": "k8s-argocd/discord-webhook-url"}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": [{"key": "argocd", "path": "service/admin-discord/k8s-argocd/discord-webhook-url"}]}}}}' > "$PLAN_FILE"
   export MOCK_CAPS_RESPONSE='{"capabilities": ["deny"]}'
 
   run bash "$SCRIPT" "$PLAN_FILE"
@@ -94,19 +94,25 @@ setup() {
 }
 
 @test "checks every entry even when an earlier one is missing a grant, and fails overall" {
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {"argocd": "k8s-argocd/discord-webhook-url", "uptime": "service/admin-discord/pi-health/uptime-webhook-url"}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": [
+    {"key": "argocd", "path": "service/admin-discord/k8s-argocd/discord-webhook-url"},
+    {"key": "uptime", "path": "service/admin-discord/pi-health/uptime-webhook-url"}
+  ]}}}}' > "$PLAN_FILE"
   export MOCK_CAPS_RESPONSE_1='{"capabilities": ["update"]}'
   export MOCK_CAPS_RESPONSE_2='{"capabilities": ["create", "update"]}'
 
   run bash "$SCRIPT" "$PLAN_FILE"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"webhooks.argocd.openbao_path"* ]]
-  [[ "$output" != *"webhooks.uptime.openbao_path"* ]]
+  [[ "$output" == *"webhooks.argocd.openbao_paths"* ]]
+  [[ "$output" != *"webhooks.uptime.openbao_paths"* ]]
   [ "$(cat "$CAPTURE_DIR/caps_call_count")" = "2" ]
 }
 
 @test "passes when every entry across multiple paths has both grants" {
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {"argocd": "k8s-argocd/discord-webhook-url", "uptime": "service/admin-discord/pi-health/uptime-webhook-url"}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": [
+    {"key": "argocd", "path": "service/admin-discord/k8s-argocd/discord-webhook-url"},
+    {"key": "uptime", "path": "service/admin-discord/pi-health/uptime-webhook-url"}
+  ]}}}}' > "$PLAN_FILE"
   export MOCK_CAPS_RESPONSE='{"capabilities": ["create", "update"]}'
 
   run bash "$SCRIPT" "$PLAN_FILE"
@@ -114,8 +120,23 @@ setup() {
   [ "$(cat "$CAPTURE_DIR/caps_call_count")" = "2" ]
 }
 
+@test "checks both paths independently when one webhook key has more than one path" {
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": [
+    {"key": "downtime", "path": "service/admin-discord/pi-health/downtime-webhook-url"},
+    {"key": "downtime", "path": "service/admin-discord/k8s-alertmanager/downtime-webhook-url"}
+  ]}}}}' > "$PLAN_FILE"
+  export MOCK_CAPS_RESPONSE_1='{"capabilities": ["create", "update"]}'
+  export MOCK_CAPS_RESPONSE_2='{"capabilities": ["update"]}'
+
+  run bash "$SCRIPT" "$PLAN_FILE"
+  [ "$status" -eq 1 ]
+  [ "$(cat "$CAPTURE_DIR/caps_call_count")" = "2" ]
+  [[ "$output" == *"missing 'create' on kv/data/homelab/service/admin-discord/k8s-alertmanager/downtime-webhook-url"* ]]
+  [[ "$output" != *"pi-health/downtime-webhook-url"* ]]
+}
+
 @test "passes when webhook_openbao_paths is empty" {
-  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": {}}}}}' > "$PLAN_FILE"
+  echo '{"planned_values": {"outputs": {"webhook_openbao_paths": {"value": []}}}}' > "$PLAN_FILE"
 
   run bash "$SCRIPT" "$PLAN_FILE"
   [ "$status" -eq 0 ]

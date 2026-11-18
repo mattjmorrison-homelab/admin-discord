@@ -7,6 +7,11 @@
 # validate-webhook-grants.sh's "plan-shaped" `tofu show -json` input, where
 # outputs live under .planned_values.outputs.<name>.value).
 #
+# webhook_openbao_paths.value is a flat list of {key, path} objects, one
+# per OpenBao path -- a single webhook key (e.g. downtime) can appear more
+# than once, each time with a different path, so this writes that same
+# key's URL to each of its paths individually.
+#
 # Usage: write-webhook-secrets.sh <outputs.json>
 # Requires VAULT_ADDR in the environment, plus the GitHub-OIDC env (see
 # scripts/lib/vault-oidc-login.sh) to log in for the write.
@@ -24,9 +29,10 @@ WEBHOOKS_TOKEN=$(vault_oidc_login admin-discord-webhooks-oidc)
 WEBHOOK_URLS=$(jq -c '.webhook_urls.value' "$OUTPUTS_FILE")
 WEBHOOK_PATHS=$(jq -c '.webhook_openbao_paths.value' "$OUTPUTS_FILE")
 
-jq -r 'keys[]' <<< "$WEBHOOK_PATHS" | while IFS= read -r key; do
+jq -c '.[]' <<< "$WEBHOOK_PATHS" | while IFS= read -r entry; do
+  key=$(jq -r '.key' <<< "$entry")
+  path_suffix=$(jq -r '.path' <<< "$entry")
   value=$(jq -r --arg k "$key" '.[$k]' <<< "$WEBHOOK_URLS")
-  path_suffix=$(jq -r --arg k "$key" '.[$k]' <<< "$WEBHOOK_PATHS")
   curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
     -d "$(jq -nc --arg value "$value" '{data: {value: $value}}')" \
     "$VAULT_ADDR/v1/kv/data/homelab/$path_suffix" > /dev/null
