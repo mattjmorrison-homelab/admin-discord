@@ -8,3 +8,9 @@ output "webhook_urls" {
   value     = { for k, w in discord_webhook.webhooks : k => w.url }
   sensitive = true
 }
+
+# Drives tofu.yml's generic write-back loop and its pre-merge OpenBao
+# grant check -- not sensitive, just KV paths.
+output "webhook_openbao_paths" {
+  value = { for k, v in local.webhooks : k => v.openbao_path }
+}
