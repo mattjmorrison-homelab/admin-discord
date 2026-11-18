@@ -141,53 +141,23 @@ jobs:
             | jq -r '.auth.client_token')
           echo "::add-mask::$WEBHOOKS_TOKEN"
           echo "WEBHOOKS_TOKEN=$WEBHOOKS_TOKEN" >> "$GITHUB_ENV"
-      - id: ui_hdmi_switch_webhook
-        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["ui-hdmi-switch"]')" >> "$GITHUB_OUTPUT"
-      - name: Write ui-hdmi-switch webhook URL
+      # Data-driven: loops over every entry in locals.tf's webhooks map
+      # (via webhook_urls + webhook_openbao_paths) instead of one
+      # hand-written step-pair per consumer -- adding a new webhook to
+      # locals.tf is enough, no new CI step required here. Same request
+      # shape as the named steps this replaces (same path construction,
+      # same {data: {value: ...}} body), just looped instead of repeated.
+      - name: Write every webhook URL into its OpenBao path
         env:
           VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
-          WEBHOOK_VALUE: ${{ steps.ui_hdmi_switch_webhook.outputs.value }}
         run: |
-          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
-            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
-            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/ui-hdmi-switch/webhook-url" > /dev/null
-      - id: graph_hdmi_switch_webhook
-        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["graph-hdmi-switch"]')" >> "$GITHUB_OUTPUT"
-      - name: Write graph-hdmi-switch webhook URL
-        env:
-          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
-          WEBHOOK_VALUE: ${{ steps.graph_hdmi_switch_webhook.outputs.value }}
-        run: |
-          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
-            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
-            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/graph-hdmi-switch/webhook-url" > /dev/null
-      - id: app_backstage_webhook
-        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["app-backstage"]')" >> "$GITHUB_OUTPUT"
-      - name: Write app-backstage webhook URL
-        env:
-          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
-          WEBHOOK_VALUE: ${{ steps.app_backstage_webhook.outputs.value }}
-        run: |
-          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
-            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
-            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/app-backstage/webhook-url" > /dev/null
-      - id: ad_reporter_confirmed_webhook
-        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["ad-reporter-confirmed"]')" >> "$GITHUB_OUTPUT"
-      - name: Write ad-reporter-confirmed webhook URL
-        env:
-          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
-          WEBHOOK_VALUE: ${{ steps.ad_reporter_confirmed_webhook.outputs.value }}
-        run: |
-          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
-            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
-            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/k8s-ad-reporter/confirmed-webhook-url" > /dev/null
-      - id: ad_reporter_suspicious_webhook
-        run: echo "value=$(tofu output -json webhook_urls | jq -r '.["ad-reporter-suspicious"]')" >> "$GITHUB_OUTPUT"
-      - name: Write ad-reporter-suspicious webhook URL
-        env:
-          VAULT_ADDR: http://k8s-openbao.openbao.svc:8200
-          WEBHOOK_VALUE: ${{ steps.ad_reporter_suspicious_webhook.outputs.value }}
-        run: |
-          curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
-            -d "$(jq -nc --arg value "$WEBHOOK_VALUE" '{data: {value: $value}}')" \
-            "$VAULT_ADDR/v1/kv/data/homelab/service/admin-discord/k8s-ad-reporter/suspicious-webhook-url" > /dev/null
+          tofu output -json webhook_urls > /tmp/webhook_urls.json
+          tofu output -json webhook_openbao_paths > /tmp/webhook_openbao_paths.json
+
+          jq -r 'keys[]' /tmp/webhook_openbao_paths.json | while IFS= read -r key; do
+            VALUE=$(jq -r --arg k "$key" '.[$k]' /tmp/webhook_urls.json)
+            PATH_SUFFIX=$(jq -r --arg k "$key" '.[$k]' /tmp/webhook_openbao_paths.json)
+            curl -sf -X POST -H "X-Vault-Token: $WEBHOOKS_TOKEN" \
+              -d "$(jq -nc --arg value "$VALUE" '{data: {value: $value}}')" \
+              "$VAULT_ADDR/v1/kv/data/homelab/$PATH_SUFFIX" > /dev/null
+          done
