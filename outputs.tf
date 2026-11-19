@@ -8,3 +8,11 @@ output "webhook_urls" {
   value     = { for k, w in discord_webhook.webhooks : k => w.url }
   sensitive = true
 }
+
+output "webhook_openbao_paths" {
+  value = flatten([
+    for k, v in local.webhooks : [
+      for p in v.openbao_paths : { key = k, path = p }
+    ]
+  ])
+}
