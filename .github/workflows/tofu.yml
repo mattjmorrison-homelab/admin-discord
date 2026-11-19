@@ -64,10 +64,6 @@ jobs:
       - uses: mattjmorrison-homelab/actions-bash@6183880188049f6e03f086d403c9db38f8089c40 # main
       - run: shellcheck scripts/*.sh scripts/lib/*.sh
       - run: bats test/
-      # Needs the plan's computed outputs -- webhook_openbao_paths is pure
-      # config, not a resource attribute, so it's known even for a
-      # brand-new entry not yet applied. That's why this runs after
-      # `tofu plan` rather than right after the OIDC fetch above.
       - run: tofu show -json tfplan > tfplan.json
       - name: Verify OpenBao write grants exist for every webhook path
         env:
@@ -137,11 +133,6 @@ jobs:
       # Consumers only ever read from OpenBao now, never this repo's
       # Terraform state directly (replaces the old read-output
       # mechanism ui-hdmi-switch/graph-hdmi-switch used to use).
-      #
-      # OIDC (todo #17): logs in via the write-only
-      # admin-discord-webhooks-oidc role (see scripts/lib/vault-oidc-login.sh)
-      # -- a distinct role just for this write, same narrow-write-scope
-      # shape the Kubernetes-auth version had.
       - run: tofu output -json > outputs.json
       - name: Write every webhook URL into its OpenBao path
         env:

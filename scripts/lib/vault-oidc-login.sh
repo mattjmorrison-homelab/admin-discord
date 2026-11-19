@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
-# Shared GitHub-OIDC -> OpenBao jwt-auth login flow, sourced (not executed)
-# by scripts needing a Vault token. ACTIONS_ID_TOKEN_REQUEST_TOKEN and
-# ACTIONS_ID_TOKEN_REQUEST_URL are already present in any step whose job
-# has `permissions: id-token: write` -- no workflow YAML passthrough needed.
-#
-# Usage: source scripts/lib/vault-oidc-login.sh
-#        token=$(vault_oidc_login <vault-role>)
-# Requires VAULT_ADDR, ACTIONS_ID_TOKEN_REQUEST_TOKEN, ACTIONS_ID_TOKEN_REQUEST_URL.
-# Prints the resulting token on stdout and masks it in the Actions log.
+# ACTIONS_ID_TOKEN_REQUEST_TOKEN and ACTIONS_ID_TOKEN_REQUEST_URL are
+# already present in any step whose job has `permissions: id-token: write`
+# -- no workflow YAML passthrough needed.
 set -euo pipefail
 
 vault_oidc_login() {

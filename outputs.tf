@@ -9,9 +9,6 @@ output "webhook_urls" {
   sensitive = true
 }
 
-# Not sensitive -- just KV paths. Flattened to one {key, path} object per
-# path rather than per webhook, since a single webhook key (e.g. downtime)
-# can list more than one path.
 output "webhook_openbao_paths" {
   value = flatten([
     for k, v in local.webhooks : [

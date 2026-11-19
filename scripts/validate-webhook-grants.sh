@@ -1,21 +1,4 @@
 #!/usr/bin/env bash
-# Verifies the webhooks-write Vault role has create+update capability on
-# every path in webhook_openbao_paths, before merge, so a new consumer
-# with no matching OpenBao grant fails loudly here instead of silently
-# at apply.
-#
-# Takes "plan-shaped" JSON from `tofu show -json tfplan` -- outputs live
-# under .planned_values.outputs.<name>.value (contrast
-# write-webhook-secrets.sh's "output-shaped" `tofu output -json`, where
-# each output's value is directly under .<name>.value).
-#
-# webhook_openbao_paths.value is a flat list of {key, path} objects -- a
-# webhook key (e.g. downtime) can appear more than once, each checked
-# independently.
-#
-# Usage: validate-webhook-grants.sh <tfplan.json>
-# Requires VAULT_ADDR, plus the GitHub-OIDC env (see
-# scripts/lib/vault-oidc-login.sh).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

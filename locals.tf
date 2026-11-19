@@ -20,11 +20,6 @@ locals {
   # `consumer` is documentation only. Each entry gets its own genuinely
   # distinct webhook object -- no sharing one webhook's value across
   # multiple consumers, even when they post into the same channel.
-  # `openbao_paths` is a list, not a single string, because one webhook
-  # object's value can need writing to more than one OpenBao path (see
-  # `downtime` below, read by both pi-health and k8s-alertmanager).
-  # Consumers only ever read OpenBao, never this repo's Terraform state
-  # directly.
   webhooks = {
     alertmanager = {
       channel       = "alerts"
