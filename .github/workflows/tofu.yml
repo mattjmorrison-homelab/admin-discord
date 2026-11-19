@@ -64,16 +64,10 @@ jobs:
       - uses: mattjmorrison-homelab/actions-bash@6183880188049f6e03f086d403c9db38f8089c40 # main
       - run: shellcheck scripts/*.sh scripts/lib/*.sh
       - run: bats test/
-      # Catches exactly the gap that caused the pi-health webhook bug
-      # (a new consumer added to locals.tf with no matching OpenBao
-      # write grant, nothing failing loudly) before merge instead of
-      # after. Needs the plan's computed outputs (webhook_openbao_paths
-      # is pure config, not a resource attribute, so it's fully known at
-      # plan time even for a brand-new output not yet in remote state) --
-      # placed after `tofu plan` rather than immediately after the OIDC
-      # credential-fetch step above for that reason, logging in via its
-      # own fresh GitHub OIDC token rather than reusing one from that
-      # earlier step.
+      # Needs the plan's computed outputs -- webhook_openbao_paths is pure
+      # config, not a resource attribute, so it's known even for a
+      # brand-new entry not yet applied. That's why this runs after
+      # `tofu plan` rather than right after the OIDC fetch above.
       - run: tofu show -json tfplan > tfplan.json
       - name: Verify OpenBao write grants exist for every webhook path
         env:
@@ -144,14 +138,7 @@ jobs:
       # Terraform state directly (replaces the old read-output
       # mechanism ui-hdmi-switch/graph-hdmi-switch used to use).
       #
-      # Data-driven: loops over every entry in locals.tf's webhooks map
-      # (via webhook_urls + webhook_openbao_paths) instead of one
-      # hand-written step-pair per consumer -- adding a new webhook to
-      # locals.tf is enough, no new CI step required here. Same request
-      # shape as the named steps this replaces (same path construction,
-      # same {data: {value: ...}} body), just looped instead of repeated.
-      #
-      # OIDC (todo #17): logs in itself via the write-only
+      # OIDC (todo #17): logs in via the write-only
       # admin-discord-webhooks-oidc role (see scripts/lib/vault-oidc-login.sh)
       # -- a distinct role just for this write, same narrow-write-scope
       # shape the Kubernetes-auth version had.

@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
-# Writes every entry in webhook_openbao_paths (tofu.yml's apply job, after
-# `tofu apply`) into its OpenBao KV path, using the matching URL from
-# webhook_urls. Both come from a single "output-shaped" JSON file produced
-# by `tofu output -json` with no output name given -- each top-level key is
-# an output name, with its value nested under .<name>.value (contrast
-# validate-webhook-grants.sh's "plan-shaped" `tofu show -json` input, where
-# outputs live under .planned_values.outputs.<name>.value).
+# Writes every entry in webhook_openbao_paths into its OpenBao KV path,
+# using the matching URL from webhook_urls. Both come from a single
+# "output-shaped" JSON file produced by `tofu output -json` -- each
+# top-level key is an output name, value nested under .<name>.value
+# (contrast validate-webhook-grants.sh's "plan-shaped" `tofu show -json`
+# input, where outputs live under .planned_values.outputs.<name>.value).
 #
-# webhook_openbao_paths.value is a flat list of {key, path} objects, one
-# per OpenBao path -- a single webhook key (e.g. downtime) can appear more
-# than once, each time with a different path, so this writes that same
-# key's URL to each of its paths individually.
+# webhook_openbao_paths.value is a flat list of {key, path} objects -- a
+# webhook key (e.g. downtime) can appear more than once, each path
+# written independently.
 #
 # Usage: write-webhook-secrets.sh <outputs.json>
-# Requires VAULT_ADDR in the environment, plus the GitHub-OIDC env (see
-# scripts/lib/vault-oidc-login.sh) to log in for the write.
+# Requires VAULT_ADDR, plus the GitHub-OIDC env (see
+# scripts/lib/vault-oidc-login.sh).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

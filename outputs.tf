@@ -9,10 +9,9 @@ output "webhook_urls" {
   sensitive = true
 }
 
-# Drives tofu.yml's generic write-back loop and its pre-merge OpenBao
-# grant check -- not sensitive, just KV paths. Flattened to one {key, path}
-# object per path rather than one entry per webhook, since a single
-# webhook key (e.g. downtime) can list more than one openbao_paths entry.
+# Not sensitive -- just KV paths. Flattened to one {key, path} object per
+# path rather than per webhook, since a single webhook key (e.g. downtime)
+# can list more than one path.
 output "webhook_openbao_paths" {
   value = flatten([
     for k, v in local.webhooks : [
