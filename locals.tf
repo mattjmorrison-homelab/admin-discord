@@ -46,6 +46,11 @@ locals {
       consumer      = "app-backstage's own CI failure-notify step"
       openbao_paths = ["service/admin-discord/app-backstage/webhook-url"]
     }
+    graph-claude = {
+      channel       = "deploys"
+      consumer      = "graph-claude's own CI failure-notify step"
+      openbao_paths = ["service/admin-discord/graph-claude/webhook-url"]
+    }
     uptime = {
       channel       = "uptime"
       consumer      = "pi-health (UPTIME_WEBHOOK_URL)"
