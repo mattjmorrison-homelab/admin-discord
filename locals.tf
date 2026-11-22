@@ -51,13 +51,20 @@ locals {
       consumer      = "pi-health (UPTIME_WEBHOOK_URL)"
       openbao_paths = ["service/admin-discord/pi-health/uptime-webhook-url"]
     }
-    downtime = {
-      channel  = "downtime"
-      consumer = "pi-health (DOWNTIME_WEBHOOK_URL) and k8s-alertmanager (PiNodeExporterDown downtime proxy)"
-      openbao_paths = [
-        "service/admin-discord/pi-health/downtime-webhook-url",
-        "service/admin-discord/k8s-alertmanager/downtime-webhook-url",
-      ]
+    pi-health-downtime = {
+      channel       = "downtime"
+      consumer      = "pi-health (DOWNTIME_WEBHOOK_URL)"
+      openbao_paths = ["service/admin-discord/pi-health/downtime-webhook-url"]
+    }
+    k8s-alertmanager-downtime = {
+      channel       = "downtime"
+      consumer      = "k8s-alertmanager (PiNodeExporterDown downtime proxy)"
+      openbao_paths = ["service/admin-discord/k8s-alertmanager/downtime-webhook-url"]
+    }
+    k8s-healthchecks-downtime = {
+      channel       = "downtime"
+      consumer      = "k8s-healthchecks (dead-man's-switch notification)"
+      openbao_paths = ["service/admin-discord/k8s-healthchecks/downtime-webhook-url"]
     }
     ad-reporter-confirmed = {
       channel       = "ad-blocked"
